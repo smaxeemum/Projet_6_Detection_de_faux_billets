@@ -1,0 +1,75 @@
+---
+title: "Détecteur de faux billets"
+output: html_notebook
+---
+
+```{r Chargement des dataframe et des librairies, include=FALSE}
+library(caret)
+library(MASS)
+library(pROC)
+
+#Le dataframe complet servira d'entraînement
+dataTrain = read.csv(file = "notes.csv", sep=',', dec = '.')
+
+#Charger ici les données à analyser
+dataTest = read.csv(file = "example.csv")
+
+print(dataTest)
+```
+
+# 1 - Modèle spécifié
+
+```{r Utilisation du modèle déterminé}
+dataTrain1 = dataTrain
+dataTrain1$is_genuine_2 = as.numeric(dataTrain1$is_genuine == "True")
+dataTrain1 = dataTrain1[, -1]
+
+#reg_log1 <- glm(is_genuine_2~ .,margin_low + length, family="binomial", data=dataTrain1)
+reg_log1 <- glm(is_genuine_2~ margin_low + length, family="binomial", data=dataTrain1)
+
+pred_1 <- predict(reg_log1,newdata=dataTest)
+
+print(reg_log1)
+```
+
+
+```{r Résulats et interprétation}
+glm_probs_1 = data.frame(resp = predict(reg_log1, newdata=dataTest, type = "resp"))
+print(glm_probs_1)
+
+dataTest$resultat_1 <- round(glm_probs_1$resp)
+c <- "Les billets"
+d <- "sont considérés comme faux"
+cat(c, dataTest$id[dataTest$resultat_1 < 1], d, ", avec des probabilités respectives proches de", 1-dataTest$resultat_1[dataTest$resultat_1 < .5])
+```
+
+# 2 - Modèle automatique
+
+```{r Entraînement et sélection du modèle, include=FALSE}
+m_lrs <- train(is_genuine ~ ., data = dataTrain, method="glmStepAIC", trControl=trainControl("none"))
+
+#Modèle final obtenu :
+print(m_lrs$finalModel)
+```
+
+```{r Application sur les données de test}
+pred <- predict(m_lrs,newdata=dataTest)
+
+#distribution des classes prédites
+print(table(pred))
+```
+
+```{r Affichage des probabilités}
+glm_probs = data.frame(probs = predict(m_lrs, newdata=dataTest, type = "prob"))
+glm_probs
+```
+
+
+```{r Insertion du résultat de la prédiction & sortie}
+dataTest$resultat <- pred
+c <- "Les billets"
+d <- "sont considérés comme faux"
+cat(c, dataTest$id[dataTest$resultat == "False"], d, ", avec des probabilités respectives de", glm_probs$probs.False[glm_probs$probs.False > .5])
+```
+
+

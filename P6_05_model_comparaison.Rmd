@@ -1,0 +1,225 @@
+---
+title: "P6 test des modèles"
+output: html_notebook
+---
+
+# 1 - Préparation
+
+```{r Librairies & données}
+library(caret)
+library(MASS)
+library(pROC)
+data = read.csv(file = "notes.csv", sep=',', dec = '.')
+```
+
+```{r Dataframe d entraîtement et de test}
+#index des individus en apprentissage
+set.seed(100)
+trainIndex <- createDataPartition(data$is_genuine,p=0.8,list=F)
+
+dataTrain <- data[trainIndex,]
+
+dataTest <- data[-trainIndex,]
+
+#fréquences absolues des classes - éch. d'apprentissage
+print(table(dataTrain$is_genuine))
+
+#fréquences relatives des classes dans l'éch. d'apprentissage
+print(prop.table(table(dataTrain$is_genuine)))
+
+#fréquences absolues des classes - éch. d'test
+print(table(dataTest$is_genuine))
+
+#distribution des classes dans l'éch. test
+print(prop.table(table(dataTest$is_genuine)))
+
+rm(trainIndex)
+```
+
+# 2 - Test des modèles
+
+```{r paramètre du processu d apprentissage}
+#paramètre du processu d'apprentissage : on laisse tout par défaut
+fitControl <- trainControl(method="none")
+```
+
+
+```{r Modèle 1}
+#apprentissage - régression logistique
+m_lr <- train(is_genuine ~ ., data = dataTrain,method="glm",trControl=fitControl)
+
+#modèle sous-jacent issu de train
+#coefficients de la régression logistique
+coef_model_1 = m_lr$finalModel
+
+#prediction
+pred <- predict(m_lr,newdata=dataTest)
+
+mat_model_1 <- confusionMatrix(data=pred,reference=as.factor(dataTest$is_genuine),positive="True")
+
+#Indicateurs par classe
+mat_class_model_1 = mat_model_1$byClass
+# Précision sur l'échantillon de test : 95% !
+
+rm(m_lr, pred)
+```
+
+
+```{r Modèle 2}
+dataTrain2 = dataTrain[, -7]
+dataTest2 = dataTest[, -7]
+
+#apprentissage - régression logistique
+m_lr <- train(is_genuine ~ ., data = dataTrain2, method="glm", trControl=fitControl)
+
+#modèle sous-jacent issu de train
+#coefficients de la régression logistique
+coef_model_2 = m_lr$finalModel
+
+#prediction
+pred <- predict(m_lr,newdata=dataTest)
+
+mat_model_2 <- confusionMatrix(data=pred,reference=as.factor(dataTest$is_genuine),positive="True")
+
+#Indicateurs par classe
+mat_class_model_2 = mat_model_2$byClass
+# Précision sur l'échantillon de test : 95% !
+
+rm(m_lr, pred, dataTrain2, dataTest2)
+```
+
+
+```{r Modèle 3}
+dataTrain3 = dataTrain[, -6:-7]
+dataTest3 = dataTest[, -6:-7]
+
+#apprentissage - régression logistique
+m_lr <- train(is_genuine ~ ., data = dataTrain3, method="glm", trControl=fitControl)
+
+#modèle sous-jacent issu de train
+#coefficients de la régression logistique
+coef_model_3 = m_lr$finalModel
+
+#prediction
+pred <- predict(m_lr,newdata=dataTest)
+
+mat_model_3 <- confusionMatrix(data=pred,reference=as.factor(dataTest$is_genuine),positive="True")
+
+#Indicateurs par classe
+mat_class_model_3 = mat_model_3$byClass
+# Précision sur l'échantillon de test : 95% !
+
+rm(m_lr, pred, coef_model_3, dataTrain3, dataTest3)
+```
+
+```{r Modèle 4}
+dataTrain4 = dataTrain[, -5:-7]
+dataTest4 = dataTest[, -5:-7]
+
+#apprentissage - régression logistique
+m_lr <- train(is_genuine ~ ., data = dataTrain4, method="glm", trControl=fitControl)
+
+#modèle sous-jacent issu de train
+#coefficients de la régression logistique
+coef_model_4 = m_lr$finalModel
+
+#prediction
+pred <- predict(m_lr,newdata=dataTest)
+
+mat_model_4 <- confusionMatrix(data=pred,reference=as.factor(dataTest$is_genuine),positive="True")
+
+#Indicateurs par classe
+mat_class_model_4 = mat_model_4$byClass
+# Précision sur l'échantillon de test : 95% !
+
+rm(m_lr, pred, coef_model_4, dataTrain4, dataTest4)
+```
+
+```{r Modèle 5}
+dataTrain5 = dataTrain[, -4:-7]
+dataTest5 = dataTest[, -4:-7]
+
+#apprentissage - régression logistique
+m_lr <- train(is_genuine ~ ., data = dataTrain5, method="glm", trControl=fitControl)
+
+#modèle sous-jacent issu de train
+#coefficients de la régression logistique
+coef_model_5 = m_lr$finalModel
+
+#prediction
+pred <- predict(m_lr,newdata=dataTest)
+
+mat_model_5 <- confusionMatrix(data=pred,reference=as.factor(dataTest$is_genuine),positive="True")
+
+#Indicateurs par classe
+mat_class_model_5 = mat_model_5$byClass
+# Précision sur l'échantillon de test : 95% !
+
+rm(m_lr, pred, coef_model_5, dataTrain5, dataTest5)
+```
+
+```{r Modèle 6}
+dataTrain6 = dataTrain[, -3:-7]
+dataTest6 = dataTest[, -3:-7]
+
+#apprentissage - régression logistique
+m_lr <- train(is_genuine ~ ., data = dataTrain6, method="glm", trControl=fitControl)
+
+#modèle sous-jacent issu de train
+#coefficients de la régression logistique
+coef_model_6 = m_lr$finalModel
+
+#prediction
+pred <- predict(m_lr,newdata=dataTest)
+
+mat_model_6 <- confusionMatrix(data=pred,reference=as.factor(dataTest$is_genuine),positive="True")
+
+#Indicateurs par classe
+mat_class_model_6 = mat_model_6$byClass
+# Précision sur l'échantillon de test : 95% !
+
+rm(m_lr, pred, coef_model_6, dataTrain6, dataTest6)
+```
+
+```{r}
+colnames(dataTrain)
+```
+
+
+```{r Modèle sélectionné dans le P6}
+dataTrainOK = dataTrain[, c(1, 5, 7)]
+dataTestOK = dataTest[, c(1, 5, 7)]
+
+m_lr <- train(is_genuine ~ ., data = dataTrainOK, method="glm", trControl=fitControl)
+
+#modèle sous-jacent issu de train
+#coefficients de la régression logistique
+coef_model_ok = m_lr$finalModel
+
+#prediction
+pred <- predict(m_lr,newdata=dataTest)
+
+mat_model_ok <- confusionMatrix(data=pred,reference=as.factor(dataTest$is_genuine),positive="True")
+
+#Indicateurs par classe
+mat_class_model_ok = mat_model_ok$byClass
+# Précision sur l'échantillon de test : 95% !
+
+rm(m_lr, pred, coef_model_ok, dataTrainOK, dataTestOK)
+```
+
+
+```{r Comparaison des modèles}
+Modèle <- c("Mod1", "Mod2", "Mod3", "Mod4", "Mod5", "Mod6", "ModOK")
+Nb_var <- c(6, 5, 4, 3, 2, 1, 2)
+Accuracy <- c(mat_model_1$overall["Accuracy"],
+              mat_model_2$overall["Accuracy"],
+              mat_model_3$overall["Accuracy"],
+              mat_model_4$overall["Accuracy"],
+              mat_model_5$overall["Accuracy"],
+              mat_model_6$overall["Accuracy"],
+              mat_model_ok$overall["Accuracy"])
+classement <- data.frame(Modèle, Nb_var, Accuracy)
+print(classement)
+```
+

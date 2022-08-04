@@ -1,0 +1,710 @@
+---
+title: "Projet 6 - Détectez des faux billets"
+output: html_notebook
+---
+
+# Librairies
+
+```{r Librairies pour les analyses univariées & bivariées, include=FALSE}
+library(funModeling) 
+library(tidyverse) 
+library(Hmisc)
+library(plotly)
+library(GGally)
+library(ggpubr)
+library(ggcorrplot)
+library(corrplot)
+library(heatmaply)
+library(RColorBrewer)
+library(corrplot)
+```
+
+# Mise en place du dataset
+
+```{r Chargement des données & nom des colonnes}
+data = read.csv(file = "notes.csv")
+names(data) <- c('authentique', 'diagonale', 'hauteur_g', 'hauteur_d', 'marge_bas', 'marge_haut', 'longueur')
+head(data, 1)
+```
+
+```{r Transformation de la variable authentique en variable binaire}
+data_test = data
+data_test$auth <- ifelse (data_test$authentique == "True", 1, 0)
+data_ok = select(data_test, subset = -c(1))
+rm(data_test)
+```
+
+
+#Mission 0 - Afin d'introduire votre analyse, effectuez une brève description des données (analyses univariées (descriptions, densité, histogramme, boxplot) et bivariées).
+
+```{r Basic eda}
+#Fonction pour observer rapidement les données, la distribution des variables quali et la distribution des variables quanti
+
+data_test = data
+data_test$authentique = factor(data_test$authentique, levels = c('True', 'False'), labels = c('vrai_billet', 'faux_billet')) #On vérifie les niveaux de la variable quali dans le dataframe d'origine, et on relabel
+basic_eda <- function(data_test)
+{
+  glimpse(data_test)
+  print(status(data_test))
+  freq(data_test) 
+  print(profiling_num(data_test))
+  plot_num(data_test)
+  describe(data_test)
+}
+
+basic_eda(data_test)
+```
+```{r Interprétation basic_eda}
+#On a 7 variable : 1 qualitative ("authentique", qui prends pour valeur 0 si le billet est faux et 1 sinon), et 6 qualitatives, qui mesurent différents aspects du billet, avec pour unité le millimètre, et 2 décimales après la virgule. 
+# Les écarts-types des variables quantitatives sont très faibles (-1mm).
+#Près de 59% des billets sont véritables (100 billets) contre 41% faux (70 billets).
+```
+
+
+```{r Boxplots & densité}
+#Pour un boxplot et densité de toutes les variables quanti, en fonction de la variable quali
+
+df = data
+fig1 <- df %>% plot_ly(x = ~authentique, y = ~diagonale, split = ~authentique, type = 'violin', box = list(visible = T), meanline = list(visible = T)) 
+fig1 <- fig1 %>% layout(xaxis = list(title = "Authenticité"),yaxis = list(title = "Diagonale",zeroline = F))
+
+fig2 <- df %>% plot_ly(x = ~authentique, y = ~hauteur_g, split = ~authentique, type = 'violin', box = list(visible = T), meanline = list(visible = T)) 
+fig2 <- fig2 %>% layout(xaxis = list(title = "Authenticité"),yaxis = list(title = "Hauteur gauche",zeroline = F))
+
+fig3 <- df %>% plot_ly(x = ~authentique, y = ~hauteur_d, split = ~authentique, type = 'violin', box = list(visible = T), meanline = list(visible = T)) 
+fig3 <- fig3 %>% layout(xaxis = list(title = "Authenticité"),yaxis = list(title = "Hauteur droite",zeroline = F))
+
+fig4 <- df %>% plot_ly(x = ~authentique, y = ~marge_bas, split = ~authentique, type = 'violin', box = list(visible = T), meanline = list(visible = T)) 
+fig4 <- fig4 %>% layout(xaxis = list(title = "Authenticité"),yaxis = list(title = "Marge basse",zeroline = F))
+
+fig5 <- df %>% plot_ly(x = ~authentique, y = ~marge_haut, split = ~authentique, type = 'violin', box = list(visible = T), meanline = list(visible = T)) 
+fig5 <- fig5 %>% layout(xaxis = list(title = "Authenticité"),yaxis = list(title = "Marge haute",zeroline = F))
+
+fig6 <- df %>% plot_ly(x = ~authentique, y = ~longueur, split = ~authentique, type = 'violin', box = list(visible = T), meanline = list(visible = T)) 
+fig6 <- fig6 %>% layout(xaxis = list(title = "Authenticité"),yaxis = list(title = "Longueur",zeroline = F))
+
+fig1
+fig2
+fig3
+fig4
+fig5
+fig6
+```
+
+
+```{r Interprétation boxplot, eval=FALSE, include=FALSE}
+Marge basse, marge haute et longueur présentent les écarts les plus importants entre les vrais et les faux billets
+```
+
+
+```{r Corrélogramme}
+#Corrélogramme (analyse 2 par 2) des variables quanti en fonction de la variable quali, plus niveau de corrélation en général et en fonction de la variable quali, plus significativité du taux de corrélation
+
+p <- ggpairs(data, 
+             columns = 1:7, 
+             ggplot2::aes(colour=authentique), 
+             title="Corrélograme") 
+p
+```
+
+
+```{r Heatmap & matrice des corrélations}
+data_num = select(data, subset = -c(1))
+
+#Matrice des corrélations
+# Calcul de la matrice
+corr <- round(cor(data_num), 1)
+
+# Calcul de la matrice de p-values de corrélation
+p.mat <- cor_pmat(data_num)
+
+# Visualiser le triangle inférieur de la matrice de corrélation & Barrer les coefficients non significatifs
+corr.plot <- ggcorrplot(
+  corr, hc.order = TRUE, type = "lower", outline.col = "white",
+  p.mat = p.mat)
+#corr.plot
+ggplotly(corr.plot)
+
+#Matrice de corrélation inversée
+corrplot(corr, type="upper", order="hclust", tl.col="black", tl.srt=45)
+
+# Calculer les coefficients de corrélation
+cor.coef <- cor(data_num)
+# Calculer les p-values de corrélation
+cor.test.p <- function(x){
+    FUN <- function(x, y) cor.test(x, y)[["p.value"]]
+    z <- outer(
+      colnames(x), 
+      colnames(x), 
+      Vectorize(function(i,j) FUN(x[,i], x[,j]))
+    )
+    dimnames(z) <- list(colnames(x), colnames(x))
+    z
+}
+
+p <- cor.test.p(data_num)
+
+# Créer la Heatmap
+heatmaply_cor(
+  cor.coef,
+  k_col = 2, 
+  k_row = 2,
+  node_type = "scatter",
+  point_size_mat = -log10(p), 
+  point_size_name = "-log10(p-value)", #on log pour ramener les chiffres entre 0 et 1 pour faciliter l'interprétation & les ordres de grandeur 
+  label_names = c("x", "y", "Correlation")
+)
+```
+
+```{r Interprétation corrélations}
+#Corrélation négative entre la longueur et toutes les autres variables SAUF la diagonale, qui est statistiquement significative
+#Corrélation positive importante entre la hauteur gauche et la hauteur droite
+```
+
+
+```{r Nettoyage 1}
+rm(cor.coef, corr, corr.plot, df, fig1, fig2, fig3, fig4, fig5, fig6, p, p.mat)
+rm(cor.test.p, basic_eda)
+```
+
+# Mission 1 - Vous réaliserez une analyse en composantes principales de l'échantillon
+
+```{r Librairies ACP, include=FALSE}
+library("FactoMineR")
+library("factoextra")
+library("Factoshiny")
+library("caret")
+```
+
+```{r Centroides & individus moyens}
+#Calcul des individus moyens : moyenne des variables par catégories : True (1) / False (0)
+indiv_moy = aggregate(data_num, list(data$auth), mean)
+print(indiv_moy)
+indiv_moy = select(indiv_moy, subset = -c(1))
+
+#Calcul en amont des centroides
+centroides = scale(data_ok[,-7], center = TRUE, scale = TRUE)
+centroides = aggregate(centroides, list(data$auth), mean)
+print(centroides)
+
+rm(centroides, indiv_moy)
+```
+
+
+```{r ACP, variables & individus}
+#ACP
+#data_num_quant = select(data_num, subset = -c(7))
+data_num_pca = PCA(data_num, scale.unit = TRUE, ncp = 7, graph = FALSE)
+data_num_pca_var = get_pca_var(data_num_pca)
+data_num_pca_ind = get_pca_ind(data_num_pca)
+```
+
+```{r Eboulis des valeurs propres}
+eig_val = get_eigenvalue(data_num_pca) 
+#Extraction des valeurs propres / variances des composantes principales - La proportion de variance expliquée par chaque valeur propre est donnée dans la deuxième colonne. Le pourcentage cumulé expliqué est obtenu en ajoutant les proportions successives de variances expliquées. Les valeurs propres peuvent être utilisées pour déterminer le nombre d’axes principaux à conserver après l’ACP (Kaiser 1961)
+eig_val
+fviz_eig(data_num_pca, addlabels = TRUE, ylim = c(0, 70)) #Visualisation des valeurs propres
+```
+
+```{r Cercle des corrélations des variables}
+get_pca_var(data_num_pca)#Extraction des résultats pour les les variables
+#fviz_pca_var(data_num_pca)#visualisation des résultats des variables
+#cos2 : qualité de représentation
+
+var <- get_pca_var(data_num_pca)
+corrplot(var$cos2, is.corr=TRUE)
+
+fviz_pca_var(data_num_pca, 
+             title='Cercle de corrélation',
+             col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE # Évite le chevauchement de texte
+             )
+fviz_pca_var(data_num_pca,
+             title='Cercle de contribution',
+             col.var = "contrib",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07")
+             )
+
+```
+
+```{r interprétation cercle des corrélations, eval=FALSE, include=FALSE}
+La diagonale est positivement corrélée à Dim2, toutes les autres variables sont positivement corrélées à Dim1 sauf la longueur, négativement corrélée à Dim1.
+Toutes les variables sont plutôt bien représentées sur PC1 sauf la diagonale (PC2) et la marge haute (PC3). On va donc sans doute regarder les 3 premiers plans factoriels
+```
+
+
+```{r Représentation des individus dans le plan factoriel}
+get_pca_ind(data_num_pca)#Extraction des résultats pour les individus
+#fviz_pca_ind(data_num_pca)#visualisation des résultats des individus
+fviz_pca_ind(data_num_pca,
+             geom.ind = "point", # Montre les points seulement (mais pas le "text")
+             col.ind = data$authentique, # colorier par groups
+             palette = "Set2",
+             addEllipses = TRUE, 
+             #ellipse.type = "confidence", # Ellipses de confiance, concentration si non spécifié
+             legend.title = "Authticité",
+             title = "Plans 1 & 2"
+             )
+
+fviz_pca_ind(data_num_pca,
+             axes = c(1,3),
+             geom.ind = "point", # Montre les points seulement (mais pas le "text")
+             col.ind = data$authentique, # colorier par groups
+             palette = "Set2",
+             addEllipses = TRUE, 
+             #ellipse.type = "confidence", # Ellipses de confiance, concentration si non spécifié
+             legend.title = "Authticité",
+             title = "Plans 1 & 3"
+             )
+
+fviz_pca_ind(data_num_pca,
+             axes = c(2,3),
+             geom.ind = "point", # Montre les points seulement (mais pas le "text")
+             col.ind = data$authentique, # colorier par groups
+             palette = "Set2",
+             addEllipses = TRUE, 
+             #ellipse.type = "confidence", # Ellipses de confiance, concentration si non spécifié
+             legend.title = "Authticité",
+             title = "Plans 2 & 3"
+             )
+```
+
+```{r Interprétation représentation des individus dans le plan factoriel, eval=FALSE, include=FALSE}
+Sur les deux premiers plans factoriels, on couvre +69% de l'information. Très peu de chevauchement entre les deux groupes, c'est donc une représentation a priori plutôt fidèle --> les deux premières dimensions permettent de distinguer efficacement un vrai billet d'un faux.
+
+Sur les plans 1 & 3, le chevauvement est plus important et la part de l'information représentée tombe à +61%. Celà reste intéressant mais moins que les deux premiers plans.
+
+Sur les plans 2&3, on ne couvre plus que 26% de l'information et le chevauchement est très important : peu pertinent pour représenter l'authenticité d'un billet
+```
+
+
+```{r Contribution des individus}
+fviz_contrib(data_num_pca, choice = "ind", addlabels = TRUE, ylim = c(0, 2), axes = 1:2)
+#Ordonner la contribution des individus au regard des dimensions --> singulariser les billets les + / - contributifs
+```
+
+
+```{r Biplot des individus & variables}
+#fviz_pca_biplot(data_num_pca)# Création d’un biplot des individus et des variables.
+
+fviz_pca_biplot (data_num_pca,
+                col.ind = data$authentique, palette = "jco",
+                addEllipses = TRUE, label = "var",
+                col.var = "black", repel = TRUE,
+                legend.title = "Authenticité",
+                title = "Projection des individus et des variables sur les deux premiers plans factoriels")
+```
+
+```{r Cos2 des individus & variables sur les 1-2-3 premières dimensions}
+fviz_cos2(data_num_pca, choice = "var", axes = 1)
+fviz_cos2(data_num_pca, choice = "var", axes = 2)
+fviz_cos2(data_num_pca, choice = "var", axes = 3)
+fviz_cos2(data_num_pca, choice = "var", axes = 1:2)
+fviz_cos2(data_num_pca, choice = "var", axes = 1:3)
+
+fviz_cos2(data_num_pca, choice = "ind", axes = 1)
+fviz_cos2(data_num_pca, choice = "ind", axes = 2)
+fviz_cos2(data_num_pca, choice = "ind", axes = 3)
+fviz_cos2(data_num_pca, choice = "ind", axes = 1:2)
+fviz_cos2(data_num_pca, choice = "ind", axes = 1:3)
+```
+
+```{r Top 25 des individus les plus discriminant sur les dimensions 1-2}
+fviz_cos2(
+  data_num_pca,
+  choice = "ind",
+  axes = 1:2,
+  fill = "steelblue",
+  color = "steelblue",
+  sort.val =  "desc",
+  top = 25)
+```
+
+
+```{r PCAShiny, eval=FALSE, include=FALSE}
+PCAshiny(data)
+# Ou resshiny = PCAshiny(data_num_pca) 
+```
+
+```{r Nettoyage optionnel, eval=FALSE, include=FALSE}
+rm(data_num_pca, data_num_pca_ind, data_num_pca_var, eig_val, var)
+```
+
+# Mission 2 - Appliquez un algorithme de classification (on peut en tester plusieurs)
+
+```{r Classificatin k-means}
+#Calculer k-means avec k = 2
+
+set.seed(666)
+res.km <- kmeans(scale(data_ok[, -7]), 2, nstart = 25) #On normalise les données avec scale (sans la dernière colonne), on veut 2 clusters et on fait 25 itérations
+
+# Clustering K-means montrant le groupe de chaque individu
+res_km = res.km$cluster
+fviz_cluster(res.km, data = data_ok,
+             palette = "Set2", 
+             geom = "point",
+             ellipse.type = "norm", 
+             ggtheme = theme_bw(), 
+             title = "Classification k-means"
+             )
+
+#On cherche à savoir comment l'algo a classé les billets par rapport à la réalité 
+data_ok$res_km = res_km
+data_ok$resultat = data_ok$auth - data_ok$res_km
+table(data_ok$resultat) #On a 69 faux billets bien classés, 92 vrais billets bien classés et seulement 9 faux négatifs ! +1 faux positif --> recoder l'une des deux variable et refaire la différence
+data_kmeans = data_ok
+data_ok = select(data_ok, subset = -c(8, 9))
+
+ctable <- table(data_kmeans$res_km, data_kmeans$auth)
+rownames(ctable) <- c("False", "True")
+colnames(ctable) <- c("Cluster1", "Cluster2")
+ctable
+
+#Comment visualiser graphiquement les deux partitions au même endroit ? --> crosstable entre les deux colonnes ? Matrice de confusion fourfoldplot
+
+#On recode les variables : pour rappel dans la colonne auth : 1 = vrai billet et 0 = faux billet. Dans la colonne res_km, 1 = vrai billet, 2 = faux billet. Il faut donc tout mettre en 1 et 0
+table_test_km = select(data_kmeans, subset = -c(9))
+table_test_km$res_km[table_test_km$res_km>1] <- 0 
+
+#Matrice de confusion via Caret :
+kmeans = as.factor(table_test_km$res_km)
+auth_kmeans = as.factor(table_test_km$auth)
+test_confu = confusionMatrix(data=kmeans, reference = auth_kmeans)
+test_confu
+
+#rm(ctable, table_test_km, kmeans, auth_kmeans, test_confu, res.km, res_km, data_kmeans)
+```
+
+```{r Classification ascendante hiérarchique simplifiée}
+data_hk = data_ok[, -7] #sélection des données
+data_scale <- scale(data_hk) #Centrage réduction
+hk_results = hclust(dist(data_scale)) #, method = "ward.D") #Application du clustering
+clusters = cutree(hk_results, 2) #Sortie des clusters
+
+dendr_color = fviz_dend(hk_results, k = 2,
+                cex = 0.4,
+                palette = "Set1",
+                rect = TRUE, 
+                rect_fill = TRUE,
+                rect_border = "Set1", 
+                labels_track_height = 0.4)
+plot(dendr_color) #dendrogramme
+
+ctable <- table(clusters, data_ok$auth)
+rownames(ctable) <- c("False", "True")
+colnames(ctable) <- c("Cluster1", "Cluster2")
+ctable
+
+confu_hk = table(clusters, data_ok$auth)
+confu_hk
+```
+
+```{r Interprétation classification hiérarchique, eval=FALSE, include=FALSE}
+On a une majorité de vrais billets (1 en ligne) dans le cluster 2
+La majorité des faux billets (0 en ligne) est dans le cluster 1
+On a tout de même 24 billets vrais classés comme faux (donc faux négatifs)
+Un seul faux positif
+
+Par rapport à la classification précédente, on perd en "pouvoir de prédiction" en comparant à la réalité
+```
+
+```{r Classification Hiérarchique sur Composantes Principales}
+#(https://www.rdocumentation.org/packages/FactoMineR/versions/2.4/topics/HCPC)
+
+hcpc_clust = HCPC(data_num_pca, nb.clust=2, consol=TRUE, iter.max=25, min=5, 
+  max=NULL, metric="euclidean", method="ward", graph=FALSE, proba=0.05, 
+  cluster.CA="rows",kk=Inf,description=TRUE)
+
+hcpc_clusters = hcpc_clust$data.clust$clust #on isole les clusters 
+
+table_hcpc = table(hcpc_clusters, data_ok$auth)
+table_hcpc
+
+#On obtient exactement les mêmes résultats qu'avec la méthode des kmeans !
+
+```
+
+
+```{r Visualisation des classifications dans le premier plan factoriel}
+data$authentique = factor(data$authentique, levels = c('True', 'False'), labels = c('vrai_billet', 'faux_billet')) #
+
+# on créé les 4 labels :
+classement_km = factor(paste(kmeans, data$authentique, sep = ' - '))
+classement_hk = factor(paste(clusters, data$authentique, sep = ' - '))
+classement_hcpc = factor(paste(hcpc_clusters, data$authentique, sep = ' - '))
+
+
+fig_km = fviz_pca_ind(data_num_pca, 
+             geom=c('point'),
+             pointshape = 19,
+             habillage = classement_km,
+             palette = c('#B20000',  # 1 - faux billet
+                         '#B26000',  # 1 - vrai billet 
+                         '#00B2A0',  # 2 - faux billet
+                         '#00B233'), # 2 - vrai billet
+             alpha.ind="cos2",
+             ellipse.type = "norm", 
+             mean.point = FALSE,
+             legend.title = "Légende",
+             title = "Visualisation k-means"
+)
+
+fig_hk = fviz_pca_ind(data_num_pca, 
+             geom=c('point'),
+             pointshape = 19,
+             habillage = classement_hk,
+             palette = c('#B20000',  # 1 - faux billet
+                         '#B26000',  # 1 - vrai billet 
+                         '#00B2A0',  # 2 - faux billet
+                         '#00B233'), # 2 - vrai billet
+             alpha.ind="cos2",
+             ellipse.type = "norm", 
+             mean.point = FALSE,
+             legend.title = "Légende",
+             title = "Visualisation class. hiérarchique"
+)
+
+fig_hcpc = fviz_pca_ind(data_num_pca, 
+             geom=c('point'),
+             pointshape = 19,
+             habillage = classement_hcpc,
+             palette = c('#B20000',  # 1 - faux billet
+                         '#B26000',  # 1 - vrai billet 
+                         '#00B2A0',  # 2 - faux billet
+                         '#00B233'), # 2 - vrai billet
+             alpha.ind="cos2",
+             ellipse.type = "norm", 
+             mean.point = FALSE,
+             legend.title = "Légende",
+             title = "Visualisation HCPC"
+)
+
+fig_km
+fig_hk
+fig_hcpc
+```
+```{r Nettoyage 2}
+rm(data_hk, data_kmeans, data_num_pca_ind, data_num_pca_var, data_scale, dendr_color, eig_val, fig_hcpc, fig_hk, fig_km, hcpc_clust, res.km, table_test_km, test_confu, var, auth_kmeans, classement_hcpc, classement_hk, classement_km, clusters, confu_hk, ctable, hcpc_clusters, kmeans, res_km, table_hcpc, hk_results, data_test)
+
+rm(data, data_num, data_num_pca, data_ok)
+```
+
+
+#Mission 3 - Modélisez les données à l'aide d'une régression logistique
+
+```{r Données & librairies, include=FALSE}
+library(caret)
+library(MASS)
+library(pROC)
+data = read.csv(file = "notes.csv", sep=',', dec = '.')
+```
+
+# 3.2 Echantillonnage & fréquences 
+
+```{r fréquences relatives des classes dans le jeu de données}
+print(prop.table(table(data$is_genuine)))
+```
+
+```{r index des individus en apprentissage}
+set.seed(100)
+trainIndex <- createDataPartition(data$is_genuine,p=0.8,list=F)
+print(length(trainIndex))
+```
+
+```{r Interprétation séparation, eval=FALSE, include=FALSE}
+On a une liste de 136 index de billets qui constituent l'échantillon d'entraînement du modèle, soit 80% des données totales. On utilise ce vecteur pour partitionner le data frame
+```
+
+```{r Composition des ensembles}
+#Pour l'ensemble d'apprentissage
+dataTrain <- data[trainIndex,]
+print(dim(dataTrain))
+
+#Pour l'échantillon test, via l'indiçage négatif
+dataTest <- data[-trainIndex,]
+print(dim(dataTest))
+```
+
+```{r Confirmation échantillonnage, eval=FALSE, include=FALSE}
+On a bien 34+136 = 170 observations
+```
+
+```{r Distribtion des classes}
+#fréquences absolues des classes - éch. d'apprentissage
+print(table(dataTrain$is_genuine))
+
+#fréquences relatives des classes dans l'éch. d'apprentissage
+print(prop.table(table(dataTrain$is_genuine)))
+
+#fréquences absolues des classes - éch. d'test
+print(table(dataTest$is_genuine))
+
+#distribution des classes dans l'éch. test
+print(prop.table(table(dataTest$is_genuine)))
+
+# --> Les fréquences relatives sont conformes avec la distribution initiale 
+```
+
+# 3.3 Modélisation 
+
+```{r Paramètres & définition du modèle}
+#paramètre du processu d'apprentissage : on laisse tout par défaut
+fitControl <- trainControl(method="none")
+#apprentissage - régression logistique
+m_lr <- train(is_genuine ~ ., data = dataTrain,method="glm",trControl=fitControl)
+print(m_lr)
+```
+
+```{r Sortie du modèle & coefficients}
+#modèle sous-jacent issu de train
+#coefficients de la régression logistique
+print(m_lr$finalModel)
+
+#AIC du modèle à 14
+```
+
+# 3.4 Prédiction
+
+```{r prédiction}
+pred <- predict(m_lr,newdata=dataTest)
+#distribution des classes prédites
+print(table(pred))
+
+#On a 13 prédiction de faux billets et 21 de vrais billets, à vérifier par la suite
+```
+
+# 3.5 Matrice de confusion et indicateurs d'évaluation
+
+```{r Matrice de confusion}
+mat <- confusionMatrix(data=pred,reference=as.factor(dataTest$is_genuine),positive="True")
+print(mat)
+
+#Taux de succès (accuracy) à 97% ! L'intervalle de confiance à 95% est fourni mais l'échantillon étant faible, l'incertitude persiste. 
+#On constate un faux positif.
+#La sensibilité à la classe positive (True) s'établit à 100% (20/(20+0) !
+```
+
+```{r Indicateurs par classe}
+print(mat$byClass)
+# Précision sur l'échantillon de test : 95% !
+```
+
+# 3.6 Evaluation du modèle
+
+# 3.6.1 Courbe LIFT
+
+```{r Explications courbe LIFT, eval=FALSE, include=FALSE}
+Utilisée pour mesurer l’efficacité d’un ciblage (scoring) 
+Pour la construire, en sus des classes observées, nous avons besoin de la probabilité (score) d’être de la classe positive fournie par le modèle [P(is_genuine = True /description)].
+
+La courbe est proche de la limite théorique (atteinte lorsque tous les is_genuine = True se voient attribuer un score plus élevé que les is_genuine = False). Notre ciblage est d’excellente qualité (trop bonne qualité, la courbe se confond avec la limite théorique -> les données sont particulières).
+```
+
+```{r Scoring & plot de la courbe LIFT}
+#score des individus positifs
+score <- predict(m_lr,dataTest,type="prob")[,"True"]
+#print(quantile(score))
+
+#On crée un data frame regroupant les classes observées et les scores
+liftdata <- data.frame(classe=as.factor(dataTest$is_genuine))
+liftdata$score <- score
+
+#objet lift
+lift_obj <- lift(classe ~ score, data=liftdata, class="True")
+print(lift_obj) #La fonction print() indique seulement la proportion des observations positives (is_genuine = True).
+
+#affichage de la courbe lift
+plot(lift_obj)
+```
+
+# 3.6.2 Coube ROC
+
+```{r Explications courbe ROC, eval=FALSE, include=FALSE}
+Elle vise à mesurer la qualité d’un modèle en s’affranchissant des coûts de mauvaise affectation et de la représentativité de l’échantillon utilisé (les proportions des classes dans l’échantillon peut être différent de celui de la population). 
+Ca ne sera pas le cas ici, puisqu'on a vérifié la proportion en amont, et que l'échantillonnage avec Caret permet de conserver les proportions
+
+Evidemment, la courbe est droite et l'aire sous la courbe est de 1 : aucune différence de proportion de vrais / faux billets entre l'échantillon et les données d'ensemble.
+L'aire sous la courbe est égale à 1 : le modèle a une capacité discriminatoire maximale (probabilité que parmi deux sujets choisis au hasard, la valeur du marqueur étudié soit plus élevée pour un vrai billet que pour un faux billet )
+```
+
+```{r Plot de la courbe ROC}
+#Score
+score <- predict(m_lr,dataTest,type="prob")[,"True"]
+#objet roc
+roc_obj <- roc(dataTest$is_genuine=="True",score)
+#plot de l'objet roc
+plot(1-roc_obj$specificities, roc_obj$sensitivities, type="l")
+abline(0,1)
+
+#Peut-être un problème au niveau de l'encodage true/false --> assayer avec des 0/1 pour voir
+```
+
+```{r Aire sous la courbe}
+print(roc_obj$auc)
+```
+
+
+# 3.7 Ré-échantillonnage
+
+```{r Explications reechantillonnage, eval=FALSE, include=FALSE}
+Le schéma apprentissage-test n’est pas forcément le plus adapté aux bases de taille réduite.
+Il est plus judicieux dans ce cas d’utiliser la totalité de la base pour élaborer le modèle prédictif, puis de passer par une technique de rééchantillonnage pour en évaluer les performances (typiquement la validation croisée ou le bootstrap).
+
+Nous conservons notre échantillon d’apprentissage tel quel, et nous procédons par validation croisée pour en estimer les
+performances. Nous verrons si le taux obtenu est conforme à celui mesuré sur l’échantillon test que nous avons mis à part.
+```
+
+```{r Validation croisée avec 10 blocs}
+#évaluation par rééchantillonnage : validation croisée avec 10 blocs, 
+fitControl <- trainControl(method="cv",number=10) #10 blocs 
+m_lr <- train(is_genuine ~ ., data = dataTrain,method="glm",trControl=fitControl)
+print(m_lr)
+```
+
+```{r Interprétation validation croisée, eval=FALSE, include=FALSE}
+Le taux de succès en validation croisée annoncé est de 97,8%, celui mesuré sur l’échantillon
+test était de 97,06%. 
+```
+
+```{r Taux dans chaque fold}
+print(m_lr$resample)
+```
+
+# 3.8 - Selection des variables
+
+# 3.8.1 - Importance des variables
+
+```{r Influence des variables}
+#importance des variables - intrinsèque au modèle
+print(varImp(m_lr))
+
+#Variable la plus influente : longueur, puis marges, puis hauteurs, puis diagonale
+```
+
+# 3.8.2 - Méthode intégrée de sélection
+
+```{r StepAIC}
+m_lrs <- train(is_genuine ~ ., data = dataTrain, method="glmStepAIC",
+trControl=trainControl("none"))
+
+#Modèle final obtenu :
+print(m_lrs$finalModel)
+```
+
+```{r Explication stepAIC, eval=FALSE, include=FALSE}
+Le modèle a un AIC de 6 : bien inférieur au modèle originel avec toutes les variables explicatives. Le critère de parcimonie amène à choisir le modèle avec le critère d'information le plus faible. C'est un compromis entre la qualité de l'ajustement et la complexité du modèle, en pénalisant les modèles ayant un grand nombre de paramètres, ce qui limite les effets de sur-ajustement (augmenter le nombre de paramètre améliore nécessairement la qualité de l'ajustement).
+```
+
+
+```{r Application sur les données test & mesure des performances}
+#application sur les données test & mesure des performances
+print(confusionMatrix(data=predict(m_lrs,newdata =
+dataTest),reference=as.factor(dataTest$is_genuine),positive="True"))
+```
+
+```{r Explications, eval=FALSE, include=FALSE}
+On est toujours à 97% d'accuracy, toujours un faux négatif : malgré la réduction du nombre de variables explicatives, le modèle prédit toujours aussi bien sur l'échantillon test ! On peut donc conserver ce modèle pour réaliser la prédiction.
+```
+
+
